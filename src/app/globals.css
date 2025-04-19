@@ -76,6 +76,13 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* Layout Variables */
+  --site-header-height: 64px; /* Adjust as needed */
+  --site-footer-height: 56px; /* Adjust as needed */
+  --left-sidebar-width: 48px; /* Reduced from 60px */
+  --right-panel-width: 160px; /* Reduced from 320px */
+  --bottom-tray-height: 100px; /* Adjusted from 120px */
 }
 
 .dark {
