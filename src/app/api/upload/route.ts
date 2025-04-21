@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
 import { v2 as cloudinary } from 'cloudinary';
-import { PrismaClient } from '@/generated/prisma/client'; // Explicit import path
+import { db as prisma } from '@/lib/db'; // Import shared instance as prisma for less code change
 import { auth } from '@clerk/nextjs/server'; // Correct import for server-side
-
-const prisma = new PrismaClient();
+import logger from '@/lib/logger';
 
 // --- DEBUG: Log environment variables before configuration ---
 console.log("--- Cloudinary Env Vars Check ---");
@@ -35,6 +34,11 @@ async function uploadToCloudinary(buffer: Buffer, options: object): Promise<any>
 }
 
 export async function POST(request: Request) {
+    // Add this log to check the environment variable
+    console.log('DATABASE_URL in /api/upload:', process.env.DATABASE_URL ? 'Loaded' : 'MISSING!');
+    // Log the full URL - REMEMBER TO REDACT PASSWORD IF SHARING LOGS
+    console.log('>>> DEBUG: Actual DATABASE_URL:', process.env.DATABASE_URL); 
+    
     const authResult = await auth(); // Await the auth() call
     const userId = authResult?.userId; // Access userId safely
     console.log(">>> DEBUG: Authenticated userId for upload:", userId); // Keep debug log for now
@@ -77,6 +81,21 @@ export async function POST(request: Request) {
                 throw new Error(`Failed to upload ${file.name} to Cloudinary.`);
             }
 
+            // --- Explicitly Test DB Connection --- 
+            try {
+              console.log(">>> DEBUG: Attempting explicit DB connection test...");
+              await prisma.$connect(); // Try to establish connection
+              // You could also perform a simple query:
+              // await prisma.$queryRaw`SELECT 1`;
+              console.log(">>> DEBUG: Explicit DB connection test successful!");
+              await prisma.$disconnect(); // Disconnect after test
+            } catch (connectionError) {
+              console.error(">>> DEBUG: Explicit DB connection test FAILED:", connectionError);
+              // Rethrow or handle as appropriate, maybe return a specific error response
+              throw new Error("Database connection failed during upload process."); 
+            }
+            // --- End Explicit DB Connection Test ---
+
             // --- Save Asset to Database (Using correct field names from schema.prisma) ---
             const newAsset = await prisma.asset.create({
                 data: {
@@ -103,7 +122,5 @@ export async function POST(request: Request) {
         console.error('Upload API Error:', error);
         const message = error instanceof Error ? error.message : 'Internal Server Error';
         return NextResponse.json({ error: 'File upload failed', details: message }, { status: 500 });
-    } finally {
-        await prisma.$disconnect(); // Disconnect Prisma client
     }
 } 

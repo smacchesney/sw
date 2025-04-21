@@ -16,6 +16,7 @@ const connectionOptions = {
 // Define queue names centrally
 export enum QueueName {
   StoryGeneration = 'story-generation',
+  IllustrationGeneration = 'illustration-generation',
   // Add other queue names here if needed
 }
 

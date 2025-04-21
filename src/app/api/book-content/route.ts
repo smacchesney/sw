@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { PrismaClient } from '@/generated/prisma/client';
-
-const prisma = new PrismaClient();
+import { db as prisma } from '@/lib/db';
+import { Prisma } from '@prisma/client';
 
 export async function GET(request: Request) {
   const { userId } = await auth();
@@ -48,7 +47,5 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error(`Error fetching content for book ${bookId}:`, error);
     return NextResponse.json({ error: 'Failed to fetch book content' }, { status: 500 });
-  } finally {
-    await prisma.$disconnect();
   }
 } 

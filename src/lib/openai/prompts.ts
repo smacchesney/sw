@@ -88,3 +88,64 @@ export { systemPrompt };
 //   if (!id) return undefined;
 //   return options.find(opt => opt.id === id)?.label;
 // } 
+
+// --- DALL-E Prompt Generation ---
+
+// Interface for DALL-E prompt inputs
+export interface DallePromptInput {
+  artStyle: string | null | undefined;
+  storyTone: string | null | undefined;
+  pageText: string | null | undefined;
+  childName?: string | null | undefined;
+  theme?: string | null | undefined;
+  keyCharacters?: string | null | undefined;
+  specialObjects?: string | null | undefined;
+  // Add any other relevant book/page data here
+}
+
+// Function to generate a DALL-E 3 prompt for a single page
+export function createDalleIllustrationPrompt(input: DallePromptInput): string {
+  // Base prompt structure
+  let prompt = `Children's picture book illustration in a ${input.artStyle || 'charming cartoon'} style. `; 
+
+  // Add tone if specified
+  if (input.storyTone) {
+    prompt += `The tone should be ${input.storyTone}. `;
+  }
+
+  // Describe the scene based on page text
+  if (input.pageText) {
+    prompt += `The scene shows: ${input.pageText}. `;
+  } else {
+    // Fallback if somehow text is missing
+    prompt += "A delightful scene from a children's story. ";
+  }
+
+  // Incorporate other details subtly
+  if (input.childName) {
+    prompt += `Include ${input.childName} if relevant to the text. `;
+  }
+  if (input.keyCharacters && input.keyCharacters !== input.childName) {
+    prompt += `Also feature ${input.keyCharacters} if mentioned. `;
+  }
+  if (input.specialObjects) {
+    prompt += `Key objects like ${input.specialObjects} might appear. `;
+  }
+  if (input.theme) {
+    prompt += `The overall theme is ${input.theme}. `;
+  }
+
+  // DALL-E 3 specific guidance (optional but can help)
+  prompt += "Ensure the style is consistent, age-appropriate for toddlers (2-5 years), and visually clear."
+
+  // Limit prompt length (DALL-E has limits, though they are generous)
+  // This is a basic trim, more sophisticated truncation might be needed
+  const maxLength = 950; // Keep it under 1000 chars as a safety measure
+  if (prompt.length > maxLength) {
+    prompt = prompt.substring(0, maxLength - 3) + '...';
+  }
+
+  return prompt;
+}
+
+// --- End DALL-E Prompt Generation --- 

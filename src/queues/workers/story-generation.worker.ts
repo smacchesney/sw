@@ -1,23 +1,22 @@
-// Register module alias programmatically FIRST
-import path from 'path';
-import moduleAlias from 'module-alias';
-
-// Point "@" to the root of the compiled files (dist-worker)
-// __dirname in the compiled file will be dist-worker/queues/workers
-moduleAlias.addAlias('@', path.join(__dirname, '..', '..'));
+// Register module alias programmatically FIRST - REMOVE THIS BLOCK
+// import path from 'path';
+// import moduleAlias from 'module-alias';
+// moduleAlias.addAlias('@', path.join(__dirname, '..', '..'));
+// END REMOVE BLOCK
 
 // Load environment variables next
 import * as dotenv from 'dotenv';
 dotenv.config();
 
 import { Worker, Job } from 'bullmq';
-import { QueueName, workerConnectionOptions } from '../../lib/queue/index'; // Keep index for clarity
-import { StoryGenerationJobData } from '@/app/api/generate/story/route';
-import { createVisionStoryGenerationPrompt, systemPrompt } from '../../lib/openai/prompts'; // No .ts
-import openai from '../../lib/openai/index'; // Keep index for clarity
-import { db as prisma } from '../../lib/db'; // No .ts
-import { Prisma, Asset, BookStatus, PageType } from '@/generated/prisma/client';
-import logger from '../../lib/logger'; // No .ts
+// Remove .js extensions
+import { QueueName, workerConnectionOptions } from '../../lib/queue/index'; 
+import { StoryGenerationJobData } from '../../app/api/generate/story/route';
+import { createVisionStoryGenerationPrompt, systemPrompt } from '../../lib/openai/prompts';
+import openai from '../../lib/openai/index';
+import { db } from '../../lib/db';
+import { Prisma, Asset, BookStatus, PageType } from '@prisma/client';
+import logger from '../../lib/logger';
 import { z } from 'zod';
 
 // --- Zod Schema for expected OpenAI JSON response ---
@@ -36,23 +35,30 @@ interface WorkerJobData extends StoryGenerationJobData {
 }
 
 async function processStoryGenerationJob(job: Job<WorkerJobData>) {
-  // Extract bookId here
-  const { userId, bookData, bookId } = job.data;
+  // Extract bookId and access other data directly from job.data
+  const { bookId } = job.data; // Destructure only bookId
+  const userId = job.data.userId; // Access directly
+  const bookData = job.data.bookData; // Access directly
+  
+  // Add null/undefined checks just in case
+  if (!userId || !bookData || !bookId) {
+    logger.error({ jobId: job.id, data: job.data }, 'Missing critical job data (userId, bookData, or bookId)');
+    throw new Error('Invalid job data received.');
+  }
+  
   logger.info({ jobId: job.id, userId, bookId, bookTitle: bookData.bookTitle }, 'Processing story generation job...');
 
   try {
     // Step 0: Update status to GENERATING
-    await prisma.book.update({
+    await db.book.update({
       where: { id: bookId },
       data: { status: BookStatus.GENERATING }, // Use imported enum
     });
     logger.info({ jobId: job.id, bookId }, 'Book status updated to GENERATING');
 
     // Step 1: Construct the prompt using the new vision-specific function
-    // Ensure bookData.assets contains the *actual* fetched asset data (from subtask 7.8)
-    const messageContent = createVisionStoryGenerationPrompt(
-      bookData as Omit<WorkerJobData['bookData'], 'assets'> & { assets: Asset[] } 
-    ); 
+    // Ensure bookData includes the fetched assets from the API route
+    const messageContent = createVisionStoryGenerationPrompt(bookData); // Pass bookData directly
 
     logger.info({ jobId: job.id }, 'Generated vision prompt content for OpenAI');
 
@@ -85,10 +91,24 @@ async function processStoryGenerationJob(job: Job<WorkerJobData>) {
       throw new Error('OpenAI returned an empty response.');
     }
 
-    // --- Add Cleanup Step for Markdown Fence ---
-    const jsonMatch = rawResult.match(/```(?:json)?\s*({.*})\s*```/sm);
-    const jsonString = jsonMatch ? jsonMatch[1] : rawResult.trim();
-    // --- End Cleanup Step ---
+    // --- Refined Cleanup Step for Markdown Fence ---
+    let jsonString = rawResult.trim();
+    // Try regex first, capturing content between fences (more robust)
+    const regexMatch = jsonString.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/m);
+    if (regexMatch && regexMatch[1]) {
+        jsonString = regexMatch[1].trim();
+    } else {
+        // Fallback: If it looks like it starts/ends with fences, strip first/last line
+        const lines = jsonString.split('\n');
+        if (lines.length >= 2 && lines[0].startsWith('```') && lines[lines.length - 1].endsWith('```')) {
+            jsonString = lines.slice(1, -1).join('\n').trim();
+        }
+        // If still starts with ``` (maybe no closing fence?), try stripping just that
+        if (jsonString.startsWith('```')) {
+            jsonString = jsonString.substring(jsonString.indexOf('\n') + 1).trim();
+        }
+    }
+    // --- End Refined Cleanup Step ---
 
     // Step 3: Parse and Validate the CLEANED JSON string
     let storyJson: z.infer<typeof openAIResponseSchema>;
@@ -132,7 +152,7 @@ async function processStoryGenerationJob(job: Job<WorkerJobData>) {
     if (pageCreationData.length > 0) {
         logger.info({ jobId: job.id, count: pageCreationData.length }, 'Storing generated pages in database...');
         // Use createMany for efficiency
-        await prisma.page.createMany({
+        await db.page.createMany({
           data: pageCreationData,
           skipDuplicates: true, // Skip if a page with the same unique constraint (e.g., bookId+pageNumber) somehow exists
         });
@@ -145,7 +165,7 @@ async function processStoryGenerationJob(job: Job<WorkerJobData>) {
     // Step 5: Update status to COMPLETED and store token usage
     const usage = completion.usage; // Extract usage object
     logger.info({ jobId: job.id, bookId, usage }, 'Updating book status and token counts.');
-    await prisma.book.update({
+    await db.book.update({
       where: { id: bookId },
       data: { 
         status: BookStatus.COMPLETED, // Use imported enum
@@ -164,7 +184,7 @@ async function processStoryGenerationJob(job: Job<WorkerJobData>) {
     logger.error({ jobId: job.id, bookId, error: error.message }, 'Error processing story generation job');
     // Update status to FAILED on error
     try {
-      await prisma.book.update({
+      await db.book.update({
         where: { id: bookId },
         data: { status: BookStatus.FAILED }, // Use imported enum
       });

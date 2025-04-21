@@ -2,12 +2,10 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { z } from 'zod';
 import { getQueue, QueueName } from '@/lib/queue'; // Import queue utilities
-// Import types from the new generated client location (Task 7.8)
-import { PrismaClient, Prisma, Asset, BookStatus } from '@/generated/prisma/client';
-
-// Initialize Prisma Client
-// Note: PrismaClient is imported from the new location now
-const prisma = new PrismaClient();
+// Import types from the default client path
+import { Asset, BookStatus } from '@prisma/client';
+// Import shared prisma instance
+import { db as prisma } from '@/lib/db'; 
 
 // REMOVED local BookStatus enum workaround (Task 7.8)
 
@@ -165,6 +163,5 @@ export async function POST(request: Request) {
          console.error({ userId, bookId: newBook.id, error: deleteError.message }, 'Failed to revert book creation.');
        }
     }
-    return NextResponse.json({ error: 'Failed to process story generation request' }, { status: 500 });
   }
 } 

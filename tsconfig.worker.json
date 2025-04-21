@@ -1,35 +1,35 @@
 {
   // Standalone configuration for worker compilation
   "compilerOptions": {
-    // --- Base options needed for compilation ---
-    "baseUrl": ".", 
-    "target": "ES2018",
+    "baseUrl": ".", // Define baseUrl here
+    "target": "ES2018", // Reverted target
     "lib": ["esnext"], 
-    "allowJs": true,
+    "allowJs": true, 
     "skipLibCheck": true,
-    "strict": true,
-    "esModuleInterop": true,
-    "resolveJsonModule": true,
-    // Include paths here so tsc can resolve aliases during compilation
-    "paths": { 
+    "strict": true, // Keeping strict, adjust if needed
+    "esModuleInterop": true, 
+    "resolveJsonModule": true, 
+    "paths": { // Define paths here
       "@/*": ["./src/*"]
     },
-    // --- Worker specific overrides ---
-    "module": "CommonJS",
-    "outDir": "./dist-worker",
-    "noEmit": false, // Ensure output is generated
-    "moduleResolution": "node",
-    "isolatedModules": false
+    "module": "CommonJS", // Reverted module type
+    "outDir": "./dist-worker", 
+    "noEmit": false, // Ensure output is generated if we were building
+    "moduleResolution": "node", // Reverted resolution
+    "isolatedModules": false,
+    "sourceMap": true, // Good for debugging
+    "allowSyntheticDefaultImports": true // Keep this, generally safe
   },
   "include": [
     "src/queues/workers/**/*",
     "src/lib/**/*",
     "src/generated/**/*"
+    // Add other necessary include paths if needed
   ],
   "exclude": [
     "node_modules",
     "dist",
-    "src/app",
+    "src/app", 
     "src/components"
   ]
 } 

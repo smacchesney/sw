@@ -1,6 +1,7 @@
 "use client"; // Layouts using context/state need to be client components
 
 import React, { useState, createContext, useContext, ReactNode } from 'react';
+import { BookStatus } from '@/generated/prisma/client'; // Import BookStatus
 
 // --- Type Definitions (Copied from page.tsx) ---
 type Asset = {
@@ -24,8 +25,9 @@ type EditorSettings = {
 export interface BookData {
     bookId: string;
     assets: Asset[];
-    pages: null | { id: string; generatedText: string }[];
+    pages: null | { id: string; generatedText: string | null; generatedImageUrl?: string | null }[];
     settings: EditorSettings & { pageLength: PageCount };
+    status?: BookStatus | null; // Add optional status field
 }
 
 interface BookCreationContextType {

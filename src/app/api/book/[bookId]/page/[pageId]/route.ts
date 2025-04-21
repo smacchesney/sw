@@ -1,20 +1,29 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { PrismaClient } from '@/generated/prisma/client';
+import { db as prisma } from '@/lib/db';
 import { z } from 'zod';
 
-const prisma = new PrismaClient();
+// Define context type
+interface RouteContext {
+  params: {
+    bookId: string;
+    pageId: string;
+  }
+}
 
 // Zod schema for request body validation
 const updatePageSchema = z.object({
-  text: z.string().min(1, { message: "Text content cannot be empty" }), // Require text
+  text: z.string(), // Allow empty string, can be handled by confirmation logic if needed
 });
 
 export async function PATCH(
-  request: Request,
-  { params }: { params: { bookId: string; pageId: string } }
+  request: NextRequest,
+  context: RouteContext
 ) {
-  const { userId } = await auth();
+  const { params } = context;
+  const authResult = await auth(); // Await auth()
+  const userId = authResult?.userId;
+  
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -58,9 +67,13 @@ export async function PATCH(
     const updatedPage = await prisma.page.update({
       where: {
         id: pageId,
+        // Add bookId and userId check here for extra safety
+        bookId: bookId,
+        book: { userId: userId },
       },
       data: {
         text: text,
+        textConfirmed: false, // Explicitly unconfirm on edit
       },
     });
 
@@ -74,7 +87,5 @@ export async function PATCH(
         return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
     }
     return NextResponse.json({ error: 'Failed to update page' }, { status: 500 });
-  } finally {
-    await prisma.$disconnect();
   }
 } 

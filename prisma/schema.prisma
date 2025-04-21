@@ -6,7 +6,6 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/prisma/client"
 }
 
 datasource db {
@@ -17,6 +16,7 @@ datasource db {
 enum BookStatus {
   DRAFT
   GENERATING
+  ILLUSTRATING
   COMPLETED
   FAILED
 }

@@ -200,6 +200,7 @@ exports.Prisma.NullsOrder = {
 exports.BookStatus = exports.$Enums.BookStatus = {
   DRAFT: 'DRAFT',
   GENERATING: 'GENERATING',
+  ILLUSTRATING: 'ILLUSTRATING',
   COMPLETED: 'COMPLETED',
   FAILED: 'FAILED'
 };
