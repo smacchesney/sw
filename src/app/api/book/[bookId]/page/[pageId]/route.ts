@@ -20,15 +20,17 @@ export async function PATCH(
   request: NextRequest,
   context: RouteContext
 ) {
-  const { params } = context;
-  const authResult = await auth(); // Await auth()
+  const { params } = context; 
+  // Await the params Promise before destructuring
+  const { bookId, pageId } = await params; 
+  
+  // Now perform auth check
+  const authResult = await auth();
   const userId = authResult?.userId;
   
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-
-  const { bookId, pageId } = params;
 
   if (!bookId || !pageId) {
     return NextResponse.json({ error: 'Missing bookId or pageId parameter' }, { status: 400 });
