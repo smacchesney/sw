@@ -1,32 +1,28 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { db as prisma } from '@/lib/db';
-import { BookStatus } from '@prisma/client';
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
+  const { userId } = await auth();
   const { searchParams } = new URL(request.url);
   const bookId = searchParams.get('bookId');
 
-  const authResult = await auth();
-  const userId = authResult?.userId;
-
   if (!userId) {
-    console.warn('Unauthorized book status check attempt');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   if (!bookId) {
-    return NextResponse.json({ error: 'Missing bookId parameter' }, { status: 400 });
+    return NextResponse.json({ error: 'Missing bookId query parameter' }, { status: 400 });
   }
 
   try {
     const book = await prisma.book.findUnique({
       where: {
         id: bookId,
-        userId: userId, // Ensure user owns the book
+        userId: userId, // Ensure ownership
       },
       select: {
-        status: true,
+        status: true, // Select only the status field
       },
     });
 
@@ -34,11 +30,10 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Book not found or access denied' }, { status: 404 });
     }
 
-    // Return the current status
     return NextResponse.json({ status: book.status }, { status: 200 });
 
   } catch (error) {
-    console.error({ userId, bookId, error }, 'Error fetching book status');
+    console.error(`Error fetching status for book ${bookId}:`, error);
     return NextResponse.json({ error: 'Failed to fetch book status' }, { status: 500 });
   }
 } 

@@ -1,120 +1,162 @@
 "use client"; // Add this directive
 
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { AspectRatio } from "@/components/ui/aspect-ratio";
-import { MoreVertical } from "lucide-react";
-import Image from "next/image";
-import Link from "next/link";
-import { useRouter } from 'next/navigation'; // Import useRouter
-// Import BookStatus from the new generated client location (Task 16.3)
-import { BookStatus } from "@/generated/prisma/client"; 
+import React from 'react';
+import Link from 'next/link'; // Import Link
+import Image from 'next/image';
+import { BookStatus, Page } from '@prisma/client'; // Import BookStatus and Page
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { MoreHorizontal, Trash2, Copy, Pencil, Eye, Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { cn } from '@/lib/utils';
+import { LibraryBook } from '@/app/library/actions'; // Assuming this type includes pages or coverImageUrl
 
-// Define the props based on the Book model and potential needs
-// Extend with other fields from the Book model as needed
-interface BookCardProps {
+// Define the props for BookCard, ensuring all needed fields are present
+// We might need to adjust this if LibraryBook from actions.ts has a different structure
+export interface BookCardProps {
   id: string;
-  title: string;
-  status: BookStatus; // Use imported enum
-  createdAt: Date;
-  thumbnailUrl?: string | null; // Assuming a field for the cover/thumbnail
-  childName: string | null; // Allow null based on actions.ts type definition
-  onDeleteClick: (bookId: string) => void; // Add this prop
-  onDuplicateClick: (bookId: string) => void; // Add this prop
+  title: string | null; // Allow null titles
+  status: BookStatus;
+  updatedAt?: Date | null; // Make updatedAt optional
+  pages?: Page[]; // Make pages optional
+  coverImageUrl?: string | null; // Allow null cover image
+  onDeleteClick: () => void;
+  onDuplicateClick: () => void;
+  isDeleting?: boolean;
+  isDuplicating?: boolean;
 }
 
-// Utility function to format dates (can be moved to a dedicated utils file later)
-const formatDate = (date: Date): string => {
-  return new Intl.DateTimeFormat("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  }).format(date);
+// Helper function to get status badge variant (can be moved to utils if used elsewhere)
+const getStatusVariant = (status: BookStatus): "default" | "secondary" | "destructive" | "outline" => {
+  switch (status) {
+    case BookStatus.COMPLETED:
+      return 'default';
+    case BookStatus.ILLUSTRATING:
+    case BookStatus.GENERATING:
+      return 'secondary';
+    case BookStatus.FAILED:
+      return 'destructive';
+    case BookStatus.DRAFT:
+    default:
+      return 'outline';
+  }
 };
 
-// Define status badge variants based on imported BookStatus enum
-const statusStyles: Record<BookStatus, string> = {
-  [BookStatus.DRAFT]: "bg-yellow-100 text-yellow-800 border-yellow-300",
-  [BookStatus.GENERATING]: "bg-blue-100 text-blue-800 border-blue-300 animate-pulse",
-  [BookStatus.COMPLETED]: "bg-green-100 text-green-800 border-green-300",
-  [BookStatus.FAILED]: "bg-red-100 text-red-800 border-red-300", // Add style for FAILED status
-};
-
-export function BookCard({
+const BookCard: React.FC<BookCardProps> = ({
   id,
   title,
+  updatedAt,
   status,
-  createdAt,
-  thumbnailUrl,
-  childName,
-  onDeleteClick, // Destructure the new prop
-  onDuplicateClick, // Destructure the new prop
-}: BookCardProps) {
-  const router = useRouter(); // Initialize router
-  const placeholderImage = "/placeholder-cover.png"; // Add a real placeholder image to public/
+  pages,
+  coverImageUrl,
+  onDeleteClick,
+  onDuplicateClick,
+  isDeleting = false,
+  isDuplicating = false,
+}) => {
+  const router = useRouter();
 
-  const handleEdit = () => {
-    // Navigate to the editor page (adjust path if needed)
-    router.push(`/edit/${id}`); 
+  const handleEditClick = () => {
+    // TODO: Implement navigation to the correct editor step based on book status
+    router.push(`/create?bookId=${id}`); // Example: Navigate to a generic create/edit page
   };
 
-  return (
-    <Card className="flex flex-col h-full overflow-hidden group transition-shadow hover:shadow-md">
-      <CardHeader className="p-0 relative">
-        {/* Thumbnail Area */}
-        <AspectRatio ratio={3 / 4}>
-          <Link href={`/book/${id}`} passHref> {/* Link to book details/editor */}
-            <Image
-              src={thumbnailUrl || placeholderImage}
-              alt={`Cover for ${title}`}
-              fill
-              className="object-cover transition-transform group-hover:scale-105"
-              sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-            />
-          </Link>
-        </AspectRatio>
-        {/* Actions Menu */}
-        <div className="absolute top-2 right-2 z-10">
-           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="secondary" size="icon" className="h-8 w-8 rounded-full bg-white/80 hover:bg-white">
-                <MoreVertical className="h-4 w-4" />
-                <span className="sr-only">Book Actions</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={handleEdit}>Edit</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => onDuplicateClick(id)}>Duplicate</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem 
-                className="text-destructive focus:text-destructive focus:bg-destructive/10" 
-                onSelect={() => onDeleteClick(id)} // Call the passed function
-              >
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+  const cardContent = (
+    <>
+      <CardHeader className="pb-2 flex-shrink-0">
+        <CardTitle className="text-lg truncate">{title || 'Untitled Book'}</CardTitle>
+        <CardDescription>Last updated: {updatedAt ? new Date(updatedAt).toLocaleDateString() : 'N/A'}</CardDescription>
       </CardHeader>
-      <CardContent className="p-4 flex-grow">
-        {/* Title and Child Name */}
-        <Link href={`/book/${id}`} passHref>
-            <CardTitle className="text-lg font-semibold mb-1 line-clamp-2 hover:text-primary">
-                {title}
-            </CardTitle>
-        </Link>
-         <p className="text-sm text-muted-foreground mb-2">{childName}</p>
+      <CardContent className="flex-grow flex flex-col pt-2"> {/* Ensure content grows and uses flex */}
+        <div className="aspect-video bg-muted rounded-md mb-2 overflow-hidden relative flex-shrink-0">
+          {/* Check if pages exists before accessing it */}
+          {coverImageUrl || (pages && pages.length > 0 && pages[0].generatedImageUrl) ? (
+            <Image
+              // Add nullish coalescing for safety, though the condition above should prevent null/undefined
+              src={coverImageUrl || pages?.[0]?.generatedImageUrl || ''} 
+              alt={`${title || 'Book'} cover`}
+              fill
+              sizes="(max-width: 640px) 90vw, (max-width: 1024px) 45vw, 25vw"
+              className="object-cover"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <span className="text-xs text-muted-foreground">No Preview</span>
+            </div>
+          )}
+        </div>
+        <div className="mt-auto"> {/* Push badge to bottom */}
+            <Badge variant={getStatusVariant(status)}>{status}</Badge>
+        </div>
       </CardContent>
-      <CardFooter className="p-4 pt-0 flex justify-between items-center text-xs text-muted-foreground">
-        {/* Status Badge */}
-         <Badge variant="outline" className={`text-xs ${statusStyles[status]}`}>
-          {status.charAt(0).toUpperCase() + status.slice(1).toLowerCase()}
-        </Badge>
-        {/* Creation Date */}
-        <span>{formatDate(createdAt)}</span>
+    </>
+  );
+
+  const isLink = status === BookStatus.COMPLETED;
+
+  return (
+    <Card className="flex flex-col hover:shadow-md transition-shadow h-full"> {/* Ensure Card takes full height */}
+      {isLink ? (
+        <Link href={`/book/${id}/preview`} className="flex flex-col flex-grow focus:outline-none focus:ring-2 focus:ring-primary rounded-lg overflow-hidden">
+          {cardContent}
+        </Link>
+      ) : (
+        <div className="flex flex-col flex-grow overflow-hidden"> {/* Non-link wrapper needs similar layout */}
+            {cardContent}
+        </div>
+      )}
+
+      {/* Actions Footer - Always outside the Link/wrapper */}
+      <CardFooter className="flex justify-end pt-2 flex-shrink-0"> {/* Prevent footer shrinking */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" disabled={isDeleting || isDuplicating}>
+              {isDeleting || isDuplicating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <MoreHorizontal className="h-4 w-4" />
+              )}
+              <span className="sr-only">Book Actions</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {isLink ? (
+              <DropdownMenuItem onClick={() => router.push(`/book/${id}/preview`)}>
+                <Eye className="mr-2 h-4 w-4" /> View Preview
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem onClick={handleEditClick} disabled={status === BookStatus.GENERATING || status === BookStatus.ILLUSTRATING}>
+                <Pencil className="mr-2 h-4 w-4" /> Edit
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem onClick={onDuplicateClick} disabled={isDuplicating}>
+              <Copy className="mr-2 h-4 w-4" /> Duplicate
+            </DropdownMenuItem>
+            {/* Add other relevant actions like Share or Download PDF later */}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={onDeleteClick} disabled={isDeleting}>
+              <Trash2 className="mr-2 h-4 w-4" /> Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </CardFooter>
     </Card>
   );
-} 
+};
+
+export default BookCard; 

@@ -1,5 +1,5 @@
 {
-  "name": "@storywink/lib",
+  "name": "@storywink/workers",
   "private": true,
   "type": "commonjs"
 } 

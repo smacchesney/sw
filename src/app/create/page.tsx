@@ -1,12 +1,17 @@
 "use client";
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import StoryboardEditor from '@/components/storyboard/storyboard-editor';
 import { Button } from '@/components/ui/button';
+import RoughUnderline from "@/components/ui/rough-underline";
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useBookCreation } from './layout';
+import { useBookCreation, BookData } from './layout';
+import { BookStatus } from '@prisma/client';
+
+// Import STYLE_LIBRARY using require due to CJS
+const { STYLE_LIBRARY } = require('@/lib/ai/styleLibrary');
 
 // --- Type Definitions --- 
 type Asset = {
@@ -14,7 +19,7 @@ type Asset = {
   thumbnailUrl: string;
 };
 type PageCount = 8 | 12 | 16;
-type DroppedAssets = Record<number, string | null>;
+type DroppedAssets = Record<number | string, string | null>;
 type EditorSettings = {
   bookTitle: string;
   childName: string;
@@ -26,17 +31,13 @@ type EditorSettings = {
   excitementElement?: string;
   isDoubleSpread: boolean;
 };
-interface BookData {
-    bookId: string;
-    assets: Asset[];
-    pages: null | { generatedText: string }[];
-    settings: EditorSettings & { pageLength: PageCount };
-}
 
 // Main Page Component
 export default function CreateBookPage() {
   const router = useRouter();
   const { setBookData } = useBookCreation();
+  const headingRef = useRef<HTMLDivElement>(null);
+  const [headingWidth, setHeadingWidth] = useState(0);
 
   const [uploadedAssets, setUploadedAssets] = useState<Asset[]>([]);
   const [droppedAssets, setDroppedAssets] = useState<DroppedAssets>({});
@@ -45,6 +46,20 @@ export default function CreateBookPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (headingRef.current) {
+      const updateWidth = () => {
+        if (headingRef.current) {
+          setHeadingWidth(headingRef.current.offsetWidth);
+        }
+      };
+      updateWidth();
+      const resizeObserver = new ResizeObserver(updateWidth);
+      resizeObserver.observe(headingRef.current);
+      return () => resizeObserver.disconnect();
+    }
+  }, []);
 
   const handleUploadComplete = (newAssets: Asset[]) => {
     setUploadedAssets(prevAssets => [...prevAssets, ...newAssets]);
@@ -86,17 +101,33 @@ export default function CreateBookPage() {
   // Story Generation Logic
   const handleGenerateStory = async () => {
     setIsGenerating(true);
-    const orderedAssetIds = Object.values(droppedAssets).filter((id): id is string => id !== null);
-    const requiredFields: (keyof EditorSettings)[] = ['artStyle', 'storyTone', 'isDoubleSpread'];
-    const missingRequiredFields = requiredFields.filter(key => editorSettings[key] === undefined);
+    const TITLE_PAGE_ID = 'title-page'; // Use consistent ID
+    
+    // Get asset IDs for STORY pages only (filter out title page asset)
+    const orderedStoryAssetIds = Object.entries(droppedAssets)
+        .filter(([key, value]) => key !== TITLE_PAGE_ID && value !== null)
+        .sort(([keyA], [keyB]) => Number(keyA) - Number(keyB)) // Sort by numeric index
+        .map(([, value]) => value as string);
+
+    const titlePageAssetId = droppedAssets[TITLE_PAGE_ID] || null; // Get title page asset if exists
+    const includeTitlePage = titlePageAssetId !== null; // Determine flag based on asset presence
+
+    // Validation
+    const requiredFields: (keyof Pick<EditorSettings, 'artStyle' | 'storyTone' | 'isDoubleSpread'>)[] = ['artStyle', 'storyTone', 'isDoubleSpread'];
+    const missingRequiredFields = requiredFields.filter(key => editorSettings[key] === undefined || editorSettings[key] === '');
     const missingOrEmptyBookTitle = !editorSettings.bookTitle?.trim();
     const missingOrEmptyChildName = !editorSettings.childName?.trim();
 
     let errorMessages: string[] = [];
-    if (orderedAssetIds.length === 0) errorMessages.push("Please add at least one photo.");
+    // Modify asset check: require at least one image for the story pages
+    if (orderedStoryAssetIds.length === 0) errorMessages.push("Please add at least one photo for the story pages."); 
+    // Check if pageCount matches number of story assets
+    if (pageCount !== orderedStoryAssetIds.length) {
+         errorMessages.push(`Please ensure the number of photos (${orderedStoryAssetIds.length}) matches the selected Page Count (${pageCount}) for story pages.`);
+    }    
     if (missingOrEmptyBookTitle) errorMessages.push("Book Title is required.");
     if (missingOrEmptyChildName) errorMessages.push("Child's Name is required.");
-    if (missingRequiredFields.length > 0) errorMessages.push(`Missing settings: ${missingRequiredFields.join(', ')}`);
+    if (missingRequiredFields.length > 0) errorMessages.push(`Missing required settings: ${missingRequiredFields.join(', ')}`);
 
     if (errorMessages.length > 0) {
         toast.error(errorMessages.join("\n"));
@@ -104,19 +135,22 @@ export default function CreateBookPage() {
         return;
     }
 
-    // Construct flat payload matching API schema
+    // Construct payload for the backend (adjust based on exact backend expectations)
     const requestPayload = {
-        bookTitle: editorSettings.bookTitle!,
+        bookTitle: editorSettings.bookTitle!, 
         childName: editorSettings.childName!,
-        pageCount: pageCount,
+        pageCount: pageCount, // Number of STORY pages
         artStyle: editorSettings.artStyle!,
         storyTone: editorSettings.storyTone!,
         isDoubleSpread: editorSettings.isDoubleSpread!,
         theme: editorSettings.theme || '',
+        // Send the droppedAssets state directly, which is Record<string, string | null>
+        // Note: Ensure the backend expects string keys for the numeric indices.
+        droppedAssets: droppedAssets, 
+        // Optional fields that might be missing from the schema but were sent before:
         people: editorSettings.people || '',
         objects: editorSettings.objects || '',
         excitementElement: editorSettings.excitementElement || '',
-        droppedAssets: droppedAssets,
     };
     console.log("Generating story with payload:", requestPayload);
 
@@ -136,38 +170,36 @@ export default function CreateBookPage() {
        if (response.status === 202) {
           const result = await response.json();
           console.log("Generation Job Accepted:", result);
+          if (!result.bookId) throw new Error("API did not return a bookId");
 
-          if (!result.bookId) {
-             throw new Error("API did not return a bookId after accepting the job.");
-          }
-
-          const finalAssets = orderedAssetIds
-            .map(id => uploadedAssets.find(asset => asset.id === id))
-            .filter((asset): asset is Asset => asset !== undefined);
-
+          // Prepare data for context using the original droppedAssets structure
+          const finalAssetsForContext = Object.values(droppedAssets)
+             .filter((id): id is string => id !== null) // Filter out null/title
+             .map(id => uploadedAssets.find(asset => asset.id === id))
+             .filter((asset): asset is Asset => asset !== undefined);
+          
           const finalSettingsForContext: EditorSettings & { pageLength: PageCount } = {
              bookTitle: requestPayload.bookTitle,
              childName: requestPayload.childName,
              artStyle: requestPayload.artStyle,
              storyTone: requestPayload.storyTone,
              theme: requestPayload.theme,
-             people: requestPayload.people,
-             objects: requestPayload.objects,
-             excitementElement: requestPayload.excitementElement,
              isDoubleSpread: requestPayload.isDoubleSpread,
-             pageLength: requestPayload.pageCount,
+             pageLength: requestPayload.pageCount, // Keep as user-selected story page count
           };
 
+          // Set bookData - We expect the review page to fetch the full data including Title page
           setBookData({
             bookId: result.bookId,
-            assets: finalAssets,
-            pages: null,
+            assets: finalAssetsForContext, // Assets only for story pages
+            pages: null, // Review page will fetch
             settings: finalSettingsForContext,
+            // Add status if available in result
+            status: result.status || BookStatus.GENERATING 
           });
 
           toast.info("Story generation started! Moving to review page...");
           router.push('/create/review');
-
        } else {
           console.warn("Received unexpected success status:", response.status);
           toast.error("Received an unexpected response from the server.");
@@ -181,28 +213,47 @@ export default function CreateBookPage() {
     }
   };
 
+  // Need to define handleRemoveAsset here for state update
+  const handleRemoveAsset = (idToRemove: number | string) => {
+     setDroppedAssets(prev => {
+         const newState = { ...prev };
+         newState[idToRemove] = null;
+         return newState;
+     });
+  };
+
   return (
     <div className="py-8 px-4">
       <div className="flex items-center mb-6">
         <Button variant="ghost" size="icon" className="mr-2" onClick={() => window.history.back()}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <h1 className="text-3xl font-bold">Create Your Story</h1>
+        <div ref={headingRef} className="relative inline-block ml-1">
+          <h1 className="text-4xl font-bold">Create Your Story</h1>
+          {headingWidth > 0 && (
+            <RoughUnderline 
+              width={headingWidth} 
+              className="absolute bottom-0 left-0 -mb-1.5"
+              roughness={3} 
+              strokeWidth={3} 
+            />
+          )}
+        </div>
       </div>
 
       <input type="file" ref={fileInputRef} onChange={handleFileInputChange} className="hidden" multiple accept="image/jpeg,image/png,image/heic,image/heif" />
 
-      {/* TEMP: Using type assertion until StoryboardEditor props are updated */}
-      {(StoryboardEditor as any)({
-          initialAssets: uploadedAssets,
-          onTriggerUpload: isUploading ? undefined : triggerUpload,
-          droppedAssets: droppedAssets,
-          onDroppedAssetsChange: setDroppedAssets,
-          editorSettings: editorSettings,
-          onEditorSettingsChange: setEditorSettings,
-          pageCount: pageCount,
-          onPageCountChange: setPageCount,
-      })}
+      <StoryboardEditor
+          initialAssets={uploadedAssets}
+          onTriggerUpload={isUploading ? undefined : triggerUpload}
+          droppedAssets={droppedAssets}
+          onDroppedAssetsChange={setDroppedAssets}
+          editorSettings={editorSettings}
+          onEditorSettingsChange={setEditorSettings}
+          pageCount={pageCount}
+          onPageCountChange={setPageCount}
+          styleLibrary={STYLE_LIBRARY}
+      />
 
       <div className="mt-6 flex justify-end">
          <Button onClick={handleGenerateStory} disabled={isGenerating || isUploading}>

@@ -9,7 +9,7 @@ type MessageContentPart =
 export interface StoryGenerationInput {
   childName: string;
   bookTitle: string;
-  pageCount: 8 | 12 | 16;
+  pageCount: 8 | 12 | 16; // Re-added
   isDoubleSpread: boolean; // May affect page numbering/layout perception?
   storyTone?: string; // ID or label from selection
   artStyle?: string; // ID or label from selection
@@ -18,10 +18,9 @@ export interface StoryGenerationInput {
   objects?: string;
   excitementElement?: string;
   // Map of grid index to asset ID (e.g., {0: 'asset1', 1: null, 2: 'asset5', ...})
-  droppedAssets: Record<number, string | null>;
+  droppedAssets: Record<number, string | null>; // Re-added
   // Full list of available assets to look up URLs
-  // Ideally, this would contain the full Asset object including the 'url' field
-  assets: Asset[]; 
+  assets: Asset[]; // Re-added
 }
 
 // System prompt defining the AI's role and core principles
@@ -50,7 +49,7 @@ export function createVisionStoryGenerationPrompt(input: StoryGenerationInput): 
 
   // --- Storyboard Sequence Section (Text and Images) ---
   messageContent.push({ type: "text", text: "# Storyboard Sequence" });
-  // Determine the number of storyboard items (cells/spreads)
+  // Reverted: Loop through all assets based on pageCount/droppedAssets
   const gridItemsCount = input.isDoubleSpread ? input.pageCount / 2 : input.pageCount;
   for (let i = 0; i < gridItemsCount; i++) {
     const assetId = input.droppedAssets[i];
@@ -71,7 +70,7 @@ export function createVisionStoryGenerationPrompt(input: StoryGenerationInput): 
   messageContent.push({ type: "text", text: `--- End Storyboard ---` });
 
   // --- Instructions Section (as Text) ---
-  const instructions = `# Instructions & Guiding Principles:\n- Craft a **cohesive story** following the image sequence precisely, with a clear beginning, middle, and end.\n- Write from a **toddler\'s perspective**, focusing on familiar experiences and relatable emotions (joy, frustration, silliness, pride).\n- Keep sentences **short, simple, and concrete**. Use strong verbs and vivid nouns. (Principle: Simple but Not Boring / Less is More)\n- Use **rhythm, repetition, and fun sounds** (onomatopoeia) where natural to create read-aloud appeal. (Principle: Musical / Interactive)\n- Incorporate **gentle, age-appropriate humor** (mild mischief, surprises) if fitting. (Principle: Funny is Gold)\n- **Naturally weave in** the user\'s provided details: Child\'s Name, Title, Tone, Theme, People, Objects, and Excitement element. Match the requested Story Tone.\n- Generate **1-3 simple sentences per page number** (referring to the sequence above, e.g., Page 1, Page 2...). Adjust sentence count slightly per page to ensure a good narrative flow across the total page count.\n- Output ONLY a valid JSON object mapping page numbers (as strings, e.g., "1", "2", ...) to the story text string for that page. Example: {"1": "Leo and Mommy went to the park.", "2": "Leo saw a bright red ball!"}`; // Add page count range to example
+  const instructions = `# Instructions & Guiding Principles:\n- Craft a **cohesive story** following the image sequence precisely, with a clear beginning, middle, and end.\n- Write from a **toddler\'s perspective**, focusing on familiar experiences and relatable emotions (joy, frustration, silliness, pride).\n- Keep sentences **short, simple, and concrete**. Use strong verbs and vivid nouns. (Principle: Simple but Not Boring / Less is More)\n- Use **rhythm, repetition, and fun sounds** (onomatopoeia) where natural to create read-aloud appeal. (Principle: Musical / Interactive)\n- Incorporate **gentle, age-appropriate humor** (mild mischief, surprises) if fitting. (Principle: Funny is Gold)\n- **Naturally weave in** the user\'s provided details: Child\'s Name, Title, Tone, Theme, People, Objects, and Excitement element. Match the requested Story Tone.\n- Generate **1-3 simple sentences per page number** (referring to the sequence above, e.g., Page 1, Page 2...). Adjust sentence count slightly per page to ensure a good narrative flow across the total page count.\n- Output ONLY a valid JSON object mapping page numbers (as strings, e.g., "1", "2", ...) to the story text string for that page. Example: {"1": "Leo and Mommy went to the park.", "2": "Leo saw a bright red ball!"}`; 
   messageContent.push({ type: "text", text: instructions });
 
   return messageContent;

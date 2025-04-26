@@ -19,34 +19,39 @@ import { Prisma, Asset, BookStatus, PageType } from '@prisma/client';
 import logger from '../../lib/logger';
 import { z } from 'zod';
 
-// --- Zod Schema for expected OpenAI JSON response ---
-// Assumes OpenAI returns an object like: { "1": "Text for page 1", "2": "Text for page 2", ... }
+// Reverted: Zod schema for the expected multi-page OpenAI JSON response
 const openAIResponseSchema = z.record(
-    z.string().regex(/^\d+$/), // Key must be string representation of a number
-    z.string().min(1) // Value must be a non-empty string
+    z.string().regex(/^\d+$/), // Key must be string representation of a number (e.g., "1", "2")
+    z.string().min(1) // Value must be a non-empty string (the page text)
 );
-// --- End Zod Schema ---
 
 // --- Job Processing Logic ---
 
-// Augment Job Data type to expect bookId (needs to be added by API route)
-interface WorkerJobData extends StoryGenerationJobData {
-  bookId: string; 
-}
+// Use the imported job data type definition (matches API route)
+type WorkerJobData = StoryGenerationJobData; // Use the imported type
 
 async function processStoryGenerationJob(job: Job<WorkerJobData>) {
-  // Extract bookId and access other data directly from job.data
-  const { bookId } = job.data; // Destructure only bookId
-  const userId = job.data.userId; // Access directly
-  const bookData = job.data.bookData; // Access directly
+  // Extract data from the NEW job structure
+  const { bookId, userId, promptContext, storyPages } = job.data; 
   
   // Add null/undefined checks just in case
-  if (!userId || !bookData || !bookId) {
-    logger.error({ jobId: job.id, data: job.data }, 'Missing critical job data (userId, bookData, or bookId)');
+  if (!userId || !bookId || !promptContext || !storyPages || storyPages.length === 0) {
+    logger.error({ jobId: job.id, data: job.data }, 'Missing critical job data (userId, bookId, promptContext, or storyPages)');
     throw new Error('Invalid job data received.');
   }
   
-  logger.info({ jobId: job.id, userId, bookId, bookTitle: bookData.bookTitle }, 'Processing story generation job...');
+  // Fetch the book record to get necessary details like pageLength
+  const book = await db.book.findUnique({
+      where: { id: bookId },
+      select: { pageLength: true /* Add other fields if needed later */ }
+  });
+
+  if (!book) {
+      logger.error({ jobId: job.id, bookId }, "Book not found in database for story generation job.");
+      throw new Error('Book not found.');
+  }
+
+  logger.info({ jobId: job.id, userId, bookId, bookTitle: promptContext.bookTitle, pageCount: storyPages.length }, 'Processing story generation job...');
 
   try {
     // Step 0: Update status to GENERATING
@@ -56,129 +61,139 @@ async function processStoryGenerationJob(job: Job<WorkerJobData>) {
     });
     logger.info({ jobId: job.id, bookId }, 'Book status updated to GENERATING');
 
-    // Step 1: Construct the prompt using the new vision-specific function
-    // Ensure bookData includes the fetched assets from the API route
-    const messageContent = createVisionStoryGenerationPrompt(bookData); // Pass bookData directly
+    // --- Generate Text for ALL pages in one go --- 
 
-    logger.info({ jobId: job.id }, 'Generated vision prompt content for OpenAI');
+    // Step 1: Construct the prompt with full book context
+    // We need the full Asset objects here for the prompt function
+    // Let's assume the API route provided them correctly in the jobData structure
+    // (We might need to adjust the API route and jobData structure again if not)
+    // Constructing the input based on jobData and required StoryGenerationInput type
+    // This requires mapping jobData.storyPages back to droppedAssets and getting full assets
+    // **Alternative (Simpler if API Route can fetch):** Pass required data directly
+    
+    // Let's refine jobData structure first (needs corresponding API route change)
+    // Assuming jobData now includes: bookId, userId, promptContext, allAssets, droppedAssetsMap
+    const fullPromptInput = {
+        ...promptContext, // Includes childName, bookTitle, tone, theme etc.
+        pageCount: book.pageLength as 8 | 12 | 16, // Use fetched pageLength, assert type
+        // Reconstruct droppedAssets map (index -> assetId)
+        droppedAssets: storyPages.reduce((acc, page, index) => {
+           acc[index] = page.assetId;
+           return acc;
+        }, {} as Record<number, string | null>),
+        // We need the full Asset objects based on the assetIds
+        // This assumes we query/pass them in jobData correctly
+        assets: storyPages.map(p => ({ 
+            id: p.assetId, 
+            url: p.originalImageUrl, 
+            // We might need MORE asset fields if prompt function uses them
+        })).filter(a => a.id && a.url) as Asset[] // Filter out pages without assets and cast
+    };
 
-    // Step 2: Call OpenAI API (using Chat Completions for GPT-4o Vision)
-    // Reference: https://platform.openai.com/docs/guides/vision
+    // Log the input being sent to the prompt function for verification
+    logger.info({ jobId: job.id, bookId }, "Constructing full story prompt...");
+    const messageContent = createVisionStoryGenerationPrompt(fullPromptInput);
+
+    // Step 2: Call OpenAI API ONCE
+    logger.info({ jobId: job.id, bookId }, "Calling OpenAI for full story...");
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o", // Or another vision-capable model
-      messages: [
-        {
-          role: "system",
-          // Use the imported systemPrompt
-          content: systemPrompt 
-        },
-        {
-          role: "user",
-          // Pass the array of message content parts directly
-          content: messageContent, 
-        },
-      ],
-      // Add response_format for JSON if supported and reliable
-      // response_format: { type: "json_object" }, 
-      max_tokens: 1500, // Adjust as needed
-      temperature: 0.7, // Adjust creativity
+        model: "gpt-4o", // Or another vision-capable model
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: messageContent },
+        ],
+        // Use original parameters for full story generation
+        max_tokens: 1500, 
+        temperature: 0.7,
+        response_format: { type: "json_object" }, // Explicitly ask for JSON
     });
 
     let rawResult = completion.choices[0]?.message?.content;
-    logger.info({ jobId: job.id }, 'Received response from OpenAI');
+    logger.info({ jobId: job.id, bookId }, 'Received response from OpenAI.');
 
     if (!rawResult) {
-      throw new Error('OpenAI returned an empty response.');
+        logger.error({ jobId: job.id, bookId }, 'OpenAI returned an empty response.');
+        throw new Error('OpenAI returned an empty response.');
     }
 
-    // --- Refined Cleanup Step for Markdown Fence ---
+    // Step 3: Cleanup and Parse the multi-page JSON response
     let jsonString = rawResult.trim();
-    // Try regex first, capturing content between fences (more robust)
     const regexMatch = jsonString.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/m);
     if (regexMatch && regexMatch[1]) {
         jsonString = regexMatch[1].trim();
     } else {
-        // Fallback: If it looks like it starts/ends with fences, strip first/last line
         const lines = jsonString.split('\n');
         if (lines.length >= 2 && lines[0].startsWith('```') && lines[lines.length - 1].endsWith('```')) {
             jsonString = lines.slice(1, -1).join('\n').trim();
         }
-        // If still starts with ``` (maybe no closing fence?), try stripping just that
         if (jsonString.startsWith('```')) {
             jsonString = jsonString.substring(jsonString.indexOf('\n') + 1).trim();
         }
     }
-    // --- End Refined Cleanup Step ---
 
-    // Step 3: Parse and Validate the CLEANED JSON string
     let storyJson: z.infer<typeof openAIResponseSchema>;
     try {
-      // Use the cleaned jsonString for parsing
-      const parsedJson = JSON.parse(jsonString);
-      storyJson = openAIResponseSchema.parse(parsedJson);
+        const parsedJson = JSON.parse(jsonString);
+        // Use the original multi-page schema
+        storyJson = openAIResponseSchema.parse(parsedJson);
+        logger.info({ jobId: job.id, bookId, pageCount: Object.keys(storyJson).length }, 'Successfully parsed story JSON');
     } catch (parseOrValidationError: any) {
-      // Log the original rawResult AND the cleaned jsonString for debugging
-      logger.error({ jobId: job.id, rawResult, jsonString, error: parseOrValidationError.message }, 'Failed to parse or validate cleaned OpenAI JSON response');
-      const details = parseOrValidationError instanceof z.ZodError ? parseOrValidationError.errors : parseOrValidationError.message;
-      throw new Error(`Failed to parse or validate AI response: ${JSON.stringify(details)}`);
+        logger.error({ jobId: job.id, rawResult, jsonString, error: parseOrValidationError.message }, 'Failed to parse/validate OpenAI JSON response');
+        const details = parseOrValidationError instanceof z.ZodError ? parseOrValidationError.errors : parseOrValidationError.message;
+        throw new Error(`Failed to parse or validate AI response: ${JSON.stringify(details)}`);
     }
-    logger.info({ jobId: job.id, pages: Object.keys(storyJson).length }, 'Successfully parsed and validated story JSON');
 
-    // Step 4: Store the generated text in the Page model
-    const pageCreationData = Object.entries(storyJson).map(([pageNumberStr, textContent]) => {
-      const pageNumber = parseInt(pageNumberStr, 10);
-      if (isNaN(pageNumber) || typeof textContent !== 'string') {
-        // Log a warning or error if the format is unexpected
-        logger.warn({ jobId: job.id, pageNumberStr, textContent }, 'Skipping invalid page data from AI response');
-        return null; // Filter out invalid entries later
-      }
-      // Determine PageType based on bookData 
-      // Note: Assumes bookData contains isDoubleSpread. Need to ensure this is passed from API.
-      const pageTypeEnum = bookData.isDoubleSpread ? PageType.SPREAD : PageType.SINGLE;
-      
-      return {
-        bookId: bookId,
-        pageNumber: pageNumber,
-        text: textContent,
-        pageType: pageTypeEnum, // Use the imported enum member
-      };
-    }).filter((data): data is NonNullable<typeof data> => data !== null); // Filter out nulls from invalid entries
+    // Step 4: Prepare page update promises
+    const pageUpdatePromises: Promise<any>[] = [];
+    for (const page of storyPages) {
+        // Find the text for this pageNumber in the parsed JSON
+        const pageNumberStr = String(page.pageNumber);
+        const textContent = storyJson[pageNumberStr];
 
-    if (pageCreationData.length === 0 && Object.keys(storyJson).length > 0) {
-        logger.error({ jobId: job.id, storyJson }, 'Failed to prepare any valid page data from AI response');
-        throw new Error('AI response contained no valid page data.')
+        if (textContent) {
+            logger.info({ jobId: job.id, pageId: page.pageId, textToSave: textContent }, "Preparing to update page text in DB");
+            pageUpdatePromises.push(
+                db.page.update({
+                    where: { id: page.pageId },
+                    data: {
+                        text: textContent, // Use extracted text
+                        textConfirmed: false,
+                    },
+                })
+            );
+        } else {
+            logger.warn({ jobId: job.id, pageId: page.pageId, pageNumber: page.pageNumber }, `No text found in OpenAI response for page number ${page.pageNumber}. Skipping update.`);
+        }
     }
-    
-    if (pageCreationData.length > 0) {
-        logger.info({ jobId: job.id, count: pageCreationData.length }, 'Storing generated pages in database...');
-        // Use createMany for efficiency
-        await db.page.createMany({
-          data: pageCreationData,
-          skipDuplicates: true, // Skip if a page with the same unique constraint (e.g., bookId+pageNumber) somehow exists
-        });
-        logger.info({ jobId: job.id, count: pageCreationData.length }, 'Successfully stored generated pages.');
+
+    // Step 5: Execute all page updates
+    if (pageUpdatePromises.length > 0) {
+        logger.info({ jobId: job.id, bookId, count: pageUpdatePromises.length }, 'Updating generated page text in database...');
+        await Promise.all(pageUpdatePromises);
+        logger.info({ jobId: job.id, bookId }, 'Successfully updated page text.');
     } else {
-        logger.warn({ jobId: job.id }, 'No pages generated or stored from AI response.');
+        logger.warn({ jobId: job.id, bookId }, 'No pages were successfully processed to update text.');
+        // Consider if this should mark the book as FAILED
     }
-    // logger.debug({ jobId: job.id, storyJson }, `Generated Story JSON`); // Kept original log if needed
 
-    // Step 5: Update status to COMPLETED and store token usage
+    // Step 6: Update final book status and token usage
     const usage = completion.usage; // Extract usage object
-    logger.info({ jobId: job.id, bookId, usage }, 'Updating book status and token counts.');
+    const totalPromptTokens = usage?.prompt_tokens || 0;
+    const totalCompletionTokens = usage?.completion_tokens || 0;
+    const finalTotalTokens = usage?.total_tokens || 0;
+    logger.info({ jobId: job.id, bookId, totalPromptTokens, totalCompletionTokens, finalTotalTokens }, 'Updating final book status and token counts.');
     await db.book.update({
-      where: { id: bookId },
-      data: { 
-        status: BookStatus.COMPLETED, // Use imported enum
-        // Store token counts if available
-        promptTokens: usage?.prompt_tokens,
-        completionTokens: usage?.completion_tokens,
-        totalTokens: usage?.total_tokens,
-       },
+        where: { id: bookId },
+        data: {
+            status: BookStatus.COMPLETED, // Use imported enum
+            promptTokens: totalPromptTokens,
+            completionTokens: totalCompletionTokens,
+            totalTokens: finalTotalTokens,
+        },
     });
-    // Use logger
     logger.info({ jobId: job.id, bookId }, 'Book status updated to COMPLETED and token counts stored.');
 
-    return storyJson; // Return result for potential logging by BullMQ
+    return { message: `Processed ${pageUpdatePromises.length} pages.` }; // Return summary
 
   } catch (error: any) {
     logger.error({ jobId: job.id, bookId, error: error.message }, 'Error processing story generation job');

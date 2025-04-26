@@ -2,15 +2,15 @@
 
 import { auth } from "@clerk/nextjs/server";
 import { db as prisma } from "@/lib/db"; // Use named import
-import logger from "@/lib/logger";
-// Import types from the new generated client location (Task 16.3)
-import { Prisma, Book, BookStatus } from "@/generated/prisma/client"; 
+import { Prisma, Book, BookStatus, Page } from "@prisma/client"; // Use @prisma/client directly
 import { revalidatePath } from 'next/cache'; // Import for revalidation
 
 // Define the structure of the book data needed by the card
 // Use imported Book type
-type BookForCard = Pick<Book, 'id' | 'title' | 'status' | 'createdAt' | 'childName'> & {
-  thumbnailUrl?: string | null; 
+type BookForCard = Pick<Book, 'id' | 'title' | 'status' | 'createdAt' | 'childName' | 'updatedAt'> & {
+  thumbnailUrl?: string | null;
+  // Explicitly include optional pages for thumbnail lookup
+  pages?: Pick<Page, 'generatedImageUrl'>[]; 
 };
 
 export interface LibraryBook extends BookForCard {}
@@ -21,79 +21,67 @@ export interface UserBooksResult {
 }
 
 export async function getUserBooks(): Promise<UserBooksResult> {
-  // Fix: Add await to auth() call (Task 16.2)
-  const { userId } = await auth(); 
+  const logger = (await import('@/lib/logger')).default;
+  const { userId } = await auth();
 
   if (!userId) {
     logger.error("Attempted to fetch books without authentication.");
-    // In a real app, you might redirect or throw a specific error
-    // For now, return empty to avoid breaking the page for unauthenticated (though middleware should prevent this)
-    // throw new Error("User not authenticated"); 
      return { inProgressBooks: [], completedBooks: [] };
   }
 
   logger.info({ userId }, "Fetching books for user library.");
 
   try {
-    // Define selection explicitly for type safety
-    const bookSelect = {
-      id: true,
-      title: true,
-      status: true,
-      createdAt: true,
-      childName: true,
-      // thumbnailUrl: true, // Add if exists
-    };
-
-    // Fetch books using the defined selection
+    // Select necessary fields, including the first page's image URL for thumbnail
     const books = await prisma.book.findMany({
       where: { userId: userId },
-      select: bookSelect, // Use the selection object
-      orderBy: { updatedAt: 'desc' },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        childName: true,
+        // Remove coverImageUrl if it doesn't exist in schema
+        pages: { // Select only the first page's image URL
+          select: {
+            generatedImageUrl: true
+          },
+          orderBy: {
+            pageNumber: Prisma.SortOrder.asc // Use Prisma.SortOrder
+          },
+          take: 1 
+        }
+      },
+      orderBy: { updatedAt: Prisma.SortOrder.desc }, // Use Prisma.SortOrder
     });
 
-    const inProgressBooks: LibraryBook[] = [];
-    const completedBooks: LibraryBook[] = [];
+    // Map to LibraryBook type, deriving thumbnailUrl
+    const libraryBooks: LibraryBook[] = books.map(book => ({
+      id: book.id,
+      title: book.title,
+      status: book.status,
+      createdAt: book.createdAt,
+      updatedAt: book.updatedAt,
+      childName: book.childName,
+      pages: book.pages as Pick<Page, 'generatedImageUrl'>[] | undefined, // Cast pages type
+      thumbnailUrl: book.pages?.[0]?.generatedImageUrl || null // Use first page image
+    }));
 
-    // Use Prisma.BookGetPayload for explicit typing (Task 16.3)
-    books.forEach((book: Prisma.BookGetPayload<{ select: typeof bookSelect }>) => {
-       // No need to check for null book here, findMany doesn't return sparse arrays
-
-       const libraryBook: LibraryBook = {
-         // Map fields from the explicitly typed book object
-         id: book.id,
-         title: book.title,
-         status: book.status,
-         createdAt: book.createdAt,
-         childName: book.childName,
-         thumbnailUrl: null // Replace if needed
-       };
-
-      // Use imported BookStatus enum (Task 16.3)
-      if (book.status === BookStatus.COMPLETED) { 
-        completedBooks.push(libraryBook);
-      } else {
-        // Treat DRAFT and GENERATING as in progress
-        inProgressBooks.push(libraryBook);
-      }
-    });
+    const inProgressBooks = libraryBooks.filter(book => book.status !== BookStatus.COMPLETED);
+    const completedBooks = libraryBooks.filter(book => book.status === BookStatus.COMPLETED);
 
     logger.info({ userId, inProgressCount: inProgressBooks.length, completedCount: completedBooks.length }, "Successfully fetched user books.");
     return { inProgressBooks, completedBooks };
 
   } catch (error) {
     logger.error({ userId, error }, "Failed to fetch user books.");
-    // Depending on how you want to handle errors on the page,
-    // you could throw the error here to be caught by an Error Boundary,
-    // or return an empty state / error indicator.
-    // Returning empty state for now.
     return { inProgressBooks: [], completedBooks: [] };
-     // throw new Error("Failed to fetch books."); 
   }
 }
 
 export async function deleteBook(bookId: string): Promise<{ success: boolean; message?: string }> {
-  // Fix: Add await to auth() call (Task 16.2)
+  const logger = (await import('@/lib/logger')).default;
   const { userId } = await auth();
 
   if (!userId) {
@@ -104,13 +92,12 @@ export async function deleteBook(bookId: string): Promise<{ success: boolean; me
   logger.info({ userId, bookId }, "Attempting to delete book.");
 
   try {
-    // First, verify the user owns the book
     const book = await prisma.book.findUnique({
       where: {
         id: bookId,
         userId: userId,
       },
-      select: { id: true }, // Select only necessary field
+      select: { id: true }, 
     });
 
     if (!book) {
@@ -118,21 +105,14 @@ export async function deleteBook(bookId: string): Promise<{ success: boolean; me
       return { success: false, message: "Book not found or access denied." };
     }
 
-    // Delete the book
     await prisma.book.delete({
       where: {
         id: bookId,
-        // No need for userId here again as we verified ownership above,
-        // but including it adds an extra layer of safety.
-        // userId: userId 
       },
     });
 
     logger.info({ userId, bookId }, "Successfully deleted book.");
-
-    // Revalidate the library path to refresh the data on the page
-    revalidatePath('/library'); 
-
+    revalidatePath('/library');
     return { success: true };
 
   } catch (error) {
@@ -141,8 +121,9 @@ export async function deleteBook(bookId: string): Promise<{ success: boolean; me
   }
 }
 
-export async function duplicateBook(bookId: string): Promise<{ success: boolean; message?: string, newBookId?: string }> {
-  // Fix: Add await to auth() call (Task 16.2)
+export async function duplicateBook(bookId: string): Promise<{ success: boolean; message?: string, newBookId?: string }>
+{
+  const logger = (await import('@/lib/logger')).default;
   const { userId } = await auth();
 
   if (!userId) {
@@ -153,13 +134,12 @@ export async function duplicateBook(bookId: string): Promise<{ success: boolean;
   logger.info({ userId, bookId }, "Attempting to duplicate book.");
 
   try {
-    // Find the original book and verify ownership
     const originalBook = await prisma.book.findUnique({
       where: {
         id: bookId,
         userId: userId,
       },
-      // Select fields needed for duplication (exclude id, createdAt, updatedAt, status)
+      // Select only fields needed for duplication
       select: {
         title: true,
         childName: true,
@@ -172,7 +152,11 @@ export async function duplicateBook(bookId: string): Promise<{ success: boolean;
         specialObjects: true,
         excitementElement: true,
         userId: true,
-        // Do NOT select pages here if we are not duplicating them
+        // Remove fields not needed for duplication
+        // createdAt: true,
+        // updatedAt: true,
+        // coverImageUrl: true, 
+        // pages: { ... } 
       }
     });
 
@@ -181,24 +165,29 @@ export async function duplicateBook(bookId: string): Promise<{ success: boolean;
       return { success: false, message: "Book not found or access denied." };
     }
 
-    // Create the new book record
-    const newBook = await prisma.book.create({
+    const newBookRecord = await prisma.book.create({
       data: {
-        ...originalBook,
-        title: `${originalBook.title} (Copy)`, // Append "(Copy)" to title
-        status: BookStatus.DRAFT, // Use imported BookStatus enum (Task 16.3)
-        // Reset other fields if necessary (e.g., generated pages/images)
-        // pages: {} // Explicitly do not connect pages if not duplicating
+        title: `${originalBook.title} (Copy)`,
+        childName: originalBook.childName,
+        pageLength: originalBook.pageLength,
+        artStyle: originalBook.artStyle,
+        tone: originalBook.tone,
+        typography: originalBook.typography,
+        theme: originalBook.theme,
+        keyCharacters: originalBook.keyCharacters,
+        specialObjects: originalBook.specialObjects,
+        excitementElement: originalBook.excitementElement,
+        userId: originalBook.userId,
+        status: BookStatus.DRAFT, 
       },
-      select: { id: true } // Select only the new ID
+      select: { id: true } // Only need the new ID
     });
 
-    logger.info({ userId, originalBookId: bookId, newBookId: newBook.id }, "Successfully duplicated book.");
-
-    // Revalidate the library path
+    logger.info({ userId, originalBookId: bookId, newBookId: newBookRecord.id }, "Successfully duplicated book.");
     revalidatePath('/library');
 
-    return { success: true, newBookId: newBook.id };
+    // Return only the ID, not the full object
+    return { success: true, newBookId: newBookRecord.id };
 
   } catch (error) {
     logger.error({ userId, bookId, error }, "Failed to duplicate book.");

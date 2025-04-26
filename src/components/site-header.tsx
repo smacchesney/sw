@@ -1,17 +1,17 @@
 import Link from "next/link";
-import { Button } from "./ui/button";
-import { UserButton, SignedIn, SignedOut } from "@clerk/nextjs";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 
 export function SiteHeader() {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-14 items-center">
-        <div className="mr-4 hidden md:flex">
+      <div className="container flex h-14 items-center px-6 md:px-8">
+        <div className="hidden md:flex items-center">
           <Link href="/" className="mr-6 flex items-center space-x-2">
-            {/* Placeholder for Logo */}
-            {/* <Image src="/logo.svg" width={24} height={24} alt="Storywink Logo" /> */}
-            <span className="hidden font-bold sm:inline-block">
-              Storywink
+            {/* Update logo text and styling */}
+            <span className="hidden font-bold text-3xl sm:inline-block text-slate-900 dark:text-white"> {/* Increased size */} 
+              Storywin<span /* style={{ color: '#4ECDC4' }} REMOVED */ >k.ai</span> {/* Split text, add color */} 
             </span>
           </Link>
           {/* <nav className="flex items-center space-x-6 text-sm font-medium">
@@ -35,8 +35,13 @@ export function SiteHeader() {
                 </Button>
              </SignedOut>
              <SignedIn>
-                 <Button asChild variant="secondary">
-                    <Link href="/library">My Library</Link>
+                 <Button asChild variant="secondary" size="sm">
+                    <Link 
+                      href="/library" 
+                      className="text-slate-900 dark:text-white transition-colors hover:text-slate-700 dark:hover:text-slate-300"
+                    >
+                      My Library
+                    </Link>
                  </Button>
                  <UserButton afterSignOutUrl="/" />
              </SignedIn>
