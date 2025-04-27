@@ -21,15 +21,14 @@
     "allowSyntheticDefaultImports": true // Keep this, generally safe
   },
   "include": [
-    "src/queues/workers/**/*",
-    "src/lib/**/*",
-    "src/generated/**/*"
-    // Add other necessary include paths if needed
+    "src/queues/**/*", 
+    "src/lib/**/*" // Include lib for shared utilities/types
+    // Removed generated/**/* - Prisma client is in node_modules
   ],
   "exclude": [
     "node_modules",
     "dist",
-    "src/app", 
-    "src/components"
+    "src/app/**/*", // Explicitly exclude all Next.js app code
+    "src/components/**/*" // Explicitly exclude React components
   ]
 } 

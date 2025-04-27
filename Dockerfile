@@ -12,10 +12,14 @@ COPY package*.json ./
 # Using ci ensures a clean, reproducible install based on package-lock.json
 RUN npm ci --omit=dev
 
+# 2. generate Prisma client
+COPY prisma ./prisma
+RUN npx prisma generate
+
 # Copy the rest of the application code
 COPY . .
 
-# Compile the worker TypeScript code
+# 3. Compile ONLY the worker TypeScript code
 # This uses tsconfig.worker.json and outputs to dist-worker/
 RUN npm run build:worker
 
