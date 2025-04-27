@@ -3,14 +3,6 @@ import { auth } from '@clerk/nextjs/server';
 import { db as prisma } from '@/lib/db';
 import { z } from 'zod';
 
-// Define context type
-interface RouteContext {
-  params: {
-    bookId: string;
-    pageId: string;
-  }
-}
-
 // Zod schema for request body validation
 const updatePageSchema = z.object({
   text: z.string(), // Allow empty string, can be handled by confirmation logic if needed
@@ -18,11 +10,9 @@ const updatePageSchema = z.object({
 
 export async function PATCH(
   request: NextRequest,
-  context: RouteContext
+  { params }: { params: { bookId: string, pageId: string } }
 ) {
-  const { params } = context; 
-  // Await the params Promise before destructuring
-  const { bookId, pageId } = await params; 
+  const { bookId, pageId } = params;
   
   // Now perform auth check
   const authResult = await auth();

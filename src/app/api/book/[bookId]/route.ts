@@ -3,21 +3,14 @@ import { auth } from '@clerk/nextjs/server';
 import { db as prisma } from '@/lib/db';
 import { BookStatus } from '@prisma/client'; // Import necessary types
 
-// Define context type for route parameters
-interface RouteContext {
-  params: {
-    bookId: string;
-  }
-}
-
 export async function GET(
   request: NextRequest,
-  context: RouteContext
+  { params }: { params: { bookId: string } }
 ) {
   // const { params } = context; // Old way
   // const { bookId } = params; 
   // Await params as suggested by Next.js 15
-  const { bookId } = await context.params as { bookId: string }; 
+  const { bookId } = params;
 
   const authResult = await auth();
   const userId = authResult?.userId;

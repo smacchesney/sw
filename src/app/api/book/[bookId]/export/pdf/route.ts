@@ -5,21 +5,14 @@ import { generateBookPdf } from '@/lib/pdf/generateBookPdf'; // Import the servi
 import logger from '@/lib/logger';
 import { Book, Page } from '@prisma/client';
 
-// Define context type for route parameters
-interface RouteContext {
-  params: {
-    bookId: string;
-  }
-}
-
 // Define the expected Book type with Pages for the PDF generator
 type BookWithPages = Book & { pages: Page[] };
 
 export async function GET(
   request: NextRequest, 
-  context: RouteContext
+  { params }: { params: { bookId: string } }
 ) {
-  const { bookId } = await context.params as { bookId: string };
+  const { bookId } = params;
   const { userId } = await auth();
 
   if (!userId) {
