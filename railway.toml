@@ -1,0 +1,3 @@
+[build]
+builder = "docker"
+dockerfilePath = "./workers/story/Dockerfile" 
