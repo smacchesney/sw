@@ -41,4 +41,4 @@ COPY --from=build /app/prisma ./prisma
 
 # Set the command to run the story generation worker
 # Ensure the path matches the output of build:worker
-CMD ["node", "dist-worker/src/queues/workers/story-generation.worker.js"] 
+CMD ["node","dist-worker/queues/workers/story-generation.worker.js"]

@@ -1,4 +1,5 @@
 [build]
 root       = "."
+builder    = "Dockerfile"              # ← *explicitly tell Railway to use Dockerfile*
 dockerfile = "workers/story/Dockerfile"
 # ⬑ omit the "builder" key – setting dockerfile implies Dockerfile builder
