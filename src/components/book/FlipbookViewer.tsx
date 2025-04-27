@@ -96,22 +96,33 @@ const FlipbookViewer = forwardRef<FlipbookActions, FlipbookViewerProps>((
   }, [initialPageNumber, pages.length]);
 
   return (
-    <div ref={containerRef} className={cn("w-full flex justify-center items-center", className)} style={{ height: containerHeight }}> 
+    <div ref={containerRef} className={cn("w-full flex justify-center items-center", className)} style={{ height: containerHeight }}>
       <HTMLFlipBook
-        ref={flipBookInternalRef} // Use the internal ref here
+        ref={flipBookInternalRef}
         width={containerWidth / 2} // Each page takes half the width in spread view
         height={containerHeight}
-        size="stretch" // Stretch pages to fit container
-        minWidth={300} // Example min width
-        maxWidth={1000} // Example max width
-        minHeight={400} // Example min height
-        maxHeight={1200} // Example max height
+        size="stretch"
+        minWidth={315}
+        maxWidth={1000}
+        minHeight={400}
+        maxHeight={1536}
         maxShadowOpacity={0.5}
-        showCover={true} // Assuming the first page is a cover
+        style={{}}
+        startPage={0}
+        drawShadow={true}
+        flippingTime={1000}
+        usePortrait={false}
         mobileScrollSupport={true}
-        onFlip={handleFlip} // Call handleFlip when page turns
-        onInit={handleInit} // Call handleInit when flipbook is ready
-        className="shadow-lg" // Add some styling
+        clickEventForward={true}
+        useMouseEvents={true}
+        showCover={false}
+        startZIndex={0}
+        autoSize={true}
+        swipeDistance={30}
+        showPageCorners={true}
+        disableFlipByClick={false}
+        renderOnlyPageLengthChange={false}
+        className={cn("w-full flex justify-center items-center", className)}
       >
         {pages.map((page, index) => (
           <div key={page.id || index} className="bg-white border border-gray-200 flex justify-center items-center overflow-hidden">

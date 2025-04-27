@@ -1,13 +1,13 @@
-import { NextResponse, NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { db as prisma } from '@/lib/db';
 import { BookStatus } from '@prisma/client'; // Import necessary types
 
 export async function GET(
-  request: NextRequest,
-  { params }
+  request: Request,
+  { params }: { params: Promise<{ bookId: string }> }
 ) {
-  const { bookId } = params as { bookId: string };
+  const { bookId } = await params;
 
   const authResult = await auth();
   const userId = authResult?.userId;

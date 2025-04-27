@@ -28,6 +28,7 @@ const eslintConfig = [
       },
     },
     rules: {
+      "react/no-unescaped-entities": "warn",
     }
   }
 ];

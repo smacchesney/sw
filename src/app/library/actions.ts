@@ -10,7 +10,7 @@ import { revalidatePath } from 'next/cache'; // Import for revalidation
 type BookForCard = Pick<Book, 'id' | 'title' | 'status' | 'createdAt' | 'childName' | 'updatedAt'> & {
   thumbnailUrl?: string | null;
   // Explicitly include optional pages for thumbnail lookup
-  pages?: Pick<Page, 'generatedImageUrl'>[]; 
+  pages?: Page[]; 
 };
 
 export interface LibraryBook extends BookForCard {}
@@ -43,10 +43,8 @@ export async function getUserBooks(): Promise<UserBooksResult> {
         updatedAt: true,
         childName: true,
         // Remove coverImageUrl if it doesn't exist in schema
-        pages: { // Select only the first page's image URL
-          select: {
-            generatedImageUrl: true
-          },
+        pages: { // Fetch all scalar fields for the first page
+          // Removed specific select: { generatedImageUrl: true }
           orderBy: {
             pageNumber: Prisma.SortOrder.asc // Use Prisma.SortOrder
           },
@@ -64,7 +62,7 @@ export async function getUserBooks(): Promise<UserBooksResult> {
       createdAt: book.createdAt,
       updatedAt: book.updatedAt,
       childName: book.childName,
-      pages: book.pages as Pick<Page, 'generatedImageUrl'>[] | undefined, // Cast pages type
+      pages: book.pages, // No need to cast anymore, type matches
       thumbnailUrl: book.pages?.[0]?.generatedImageUrl || null // Use first page image
     }));
 

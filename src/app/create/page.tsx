@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import RoughUnderline from "@/components/ui/rough-underline";
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useBookCreation, BookData } from './layout';
+import { useBookCreation, BookData } from '@/context/BookCreationContext';
 import { BookStatus } from '@prisma/client';
 
 // Import STYLE_LIBRARY using require due to CJS

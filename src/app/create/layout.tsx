@@ -1,64 +1,8 @@
 "use client"; // Layouts using context/state need to be client components
 
-import React, { useState, createContext, useContext, ReactNode } from 'react';
-import { BookStatus } from '@/generated/prisma/client'; // Import BookStatus
-
-// --- Type Definitions (Copied from page.tsx) ---
-type Asset = {
-  id: string;
-  thumbnailUrl: string;
-};
-type PageCount = 8 | 12 | 16;
-type EditorSettings = {
-  bookTitle: string;
-  childName: string;
-  artStyle: string;
-  storyTone: string;
-  theme?: string;
-  people?: string;
-  objects?: string;
-  excitementElement?: string;
-  isDoubleSpread: boolean;
-};
-
-// Export the BookData interface
-export interface BookData {
-    bookId: string;
-    assets: Asset[];
-    pages: null | { id: string; generatedText: string | null; generatedImageUrl?: string | null }[];
-    settings: EditorSettings & { pageLength: PageCount };
-    status?: BookStatus | null; // Add optional status field
-}
-
-interface BookCreationContextType {
-  bookData: BookData | null;
-  setBookData: (data: BookData | null) => void;
-}
-// --- End Type Definitions ---
-
-// --- Context Definition & Provider (Moved Here) ---
-// Export the context itself
-export const BookCreationContext = createContext<BookCreationContextType | undefined>(undefined);
-
-// Export the custom hook for easy consumption
-export const useBookCreation = () => {
-  const context = useContext(BookCreationContext);
-  if (!context) {
-    throw new Error('useBookCreation must be used within a BookCreationProvider defined in CreateLayout');
-  }
-  return context;
-};
-
-// Provider component (doesn't need export if only used here)
-const BookCreationProvider = ({ children }: { children: ReactNode }) => {
-  const [bookData, setBookData] = useState<BookData | null>(null);
-  return (
-    <BookCreationContext.Provider value={{ bookData, setBookData }}>
-      {children}
-    </BookCreationContext.Provider>
-  );
-};
-// --- End Context --- 
+import { ReactNode } from 'react';
+// Import ONLY the provider from the new context file
+import { BookCreationProvider } from '@/context/BookCreationContext';
 
 // Layout Component
 export default function CreateLayout({ children }: { children: React.ReactNode }) {
