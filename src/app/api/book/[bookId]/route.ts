@@ -6,10 +6,7 @@ import { BookStatus } from '@prisma/client'; // Import necessary types
 export async function GET(
   request: Request,
   { params }: { params: { bookId: string } }
-) {
-  // const { params } = context; // Old way
-  // const { bookId } = params; 
-  // Await params as suggested by Next.js 15
+): Promise<NextResponse> {
   const { bookId } = params;
 
   const authResult = await auth();

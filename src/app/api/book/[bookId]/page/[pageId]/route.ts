@@ -11,7 +11,7 @@ const updatePageSchema = z.object({
 export async function PATCH(
   request: Request,
   { params }: { params: { bookId: string, pageId: string } }
-) {
+): Promise<NextResponse> {
   const { bookId, pageId } = params;
   
   // Now perform auth check

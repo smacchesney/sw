@@ -9,10 +9,10 @@ import { Book, Page } from '@prisma/client';
 type BookWithPages = Book & { pages: Page[] };
 
 export async function GET(
-  request: Request, 
-  { params }: { params: { bookId: string } }
-) {
-  const { bookId } = params;
+  request: Request,
+  { params }: { params: { bookId: string } } // Use explicit shape destructuring
+): Promise<NextResponse> {
+  const { bookId } = params; // Access via destructured params
   const { userId } = await auth();
 
   if (!userId) {
