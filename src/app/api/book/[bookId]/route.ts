@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { db as prisma } from '@/lib/db';
 import { BookStatus } from '@prisma/client'; // Import necessary types
 
 export async function GET(
-  request: NextRequest,
+  request: Request,
   { params }: { params: { bookId: string } }
 ) {
   // const { params } = context; // Old way

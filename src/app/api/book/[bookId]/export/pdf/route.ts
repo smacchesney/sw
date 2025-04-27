@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { db as prisma } from '@/lib/db';
 import { generateBookPdf } from '@/lib/pdf/generateBookPdf'; // Import the service
@@ -9,7 +9,7 @@ import { Book, Page } from '@prisma/client';
 type BookWithPages = Book & { pages: Page[] };
 
 export async function GET(
-  request: NextRequest, 
+  request: Request, 
   { params }: { params: { bookId: string } }
 ) {
   const { bookId } = params;

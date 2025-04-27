@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { db as prisma } from '@/lib/db';
 import { z } from 'zod';
@@ -9,7 +9,7 @@ const updatePageSchema = z.object({
 });
 
 export async function PATCH(
-  request: NextRequest,
+  request: Request,
   { params }: { params: { bookId: string, pageId: string } }
 ) {
   const { bookId, pageId } = params;
