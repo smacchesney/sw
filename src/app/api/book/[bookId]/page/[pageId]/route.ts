@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { db as prisma } from '@/lib/db';
 import { z } from 'zod';
@@ -9,10 +9,11 @@ const updatePageSchema = z.object({
 });
 
 export async function PATCH(
-  request: Request,
-  { params }: { params: { bookId: string, pageId: string } }
-): Promise<NextResponse> {
-  const { bookId, pageId } = params;
+  request: NextRequest,
+  { params }
+) {
+  // Cast params inside
+  const { bookId, pageId } = params as { bookId: string, pageId: string };
   
   // Now perform auth check
   const authResult = await auth();

@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { db as prisma } from '@/lib/db';
 import { generateBookPdf } from '@/lib/pdf/generateBookPdf'; // Import the service
@@ -9,10 +9,11 @@ import { Book, Page } from '@prisma/client';
 type BookWithPages = Book & { pages: Page[] };
 
 export async function GET(
-  request: Request,
-  { params }: { params: { bookId: string } } // Use explicit shape destructuring
-): Promise<NextResponse> {
-  const { bookId } = params; // Access via destructured params
+  request: NextRequest,
+  { params } // No type annotation
+) {
+  // Cast params inside
+  const { bookId } = params as { bookId: string };
   const { userId } = await auth();
 
   if (!userId) {
