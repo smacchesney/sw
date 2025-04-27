@@ -1,3 +1,4 @@
 [build]
-builder = "docker"
-dockerfilePath = "./workers/story/Dockerfile" 
+root       = "."
+dockerfile = "workers/story/Dockerfile"
+# ⬑ omit the "builder" key – setting dockerfile implies Dockerfile builder
