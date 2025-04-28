@@ -23,9 +23,8 @@ COPY . .
 # This uses tsconfig.worker.json and outputs to dist-worker/
 RUN npm run build:worker
 
-# Copy the workers' package.json so Node sees "type":"commonjs"
-RUN mkdir -p dist-worker/queues/workers \
-    && cp src/queues/workers/package.json dist-worker/queues/workers/package.json
+# Add CommonJS manifest at the *root* of the compiled worker tree
+RUN cp src/queues/workers/package.json dist-worker/package.json
 
 # ---- run ----
 # Start from a clean Node.js Alpine image
