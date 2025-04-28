@@ -118,8 +118,8 @@ function createIllustrationPrompt(options: PromptOptions): string {
       `Apply this exact visual language: ${styleBlock}.`,
       "Keep all colours, character poses and background layout from the provided reference photo.",
       "Set white balance to 6000 K.",
-      bookTitle ? `The book title is \"${bookTitle}\". Integrate this title text seamlessly and artistically into the illustration itself, like a real book cover.` : null,
-      bookTitle ? `Ensure the title text placement is aesthetically pleasing and does not obscure any important characters or details in the main illustration.` : null,
+      bookTitle ? `The book title is \"${bookTitle}\". Integrate this title text (exactly) seamlessly and artistically into the illustration itself, like a real book cover.` : null,
+      bookTitle ? `Ensure the title text placement is aesthetically pleasing, very legible and does not obscure any important characters or details in the main illustration.` : null,
       theme ? `Overall theme: ${theme}.` : null,
       tone ? `Mood: ${tone}.` : null,
       "Create a captivating image suitable for a cover/title page.",
@@ -127,17 +127,32 @@ function createIllustrationPrompt(options: PromptOptions): string {
     ];
   } else {
     parts = [
-      "You are illustrating a toddler board book.",
-      `Apply this exact visual language: ${styleBlock}.`,
-      "Keep all colours, character poses and background layout from the provided reference photo.",
-      "Set white balance to 6000 K.",
-      theme ? `Overall theme: ${theme}.` : null,
-      tone ? `Mood: ${tone}.` : null,
-      "Reserve the bottom 20 % of the canvas for a caption box – navy (#1a2a6b) background, white Comic Neue bold text.",
-      pageText?.trim()
-        ? `Place exactly this sentence in the caption box: \"${pageText.trim()}\".`
-        : "Leave the caption box blank on this page.",
-      "Return a single square 1024×1024 JPG."
+        // ■ 0  Format & context
+  "You are illustrating a toddler board book.",
+  "Return ONE square 1024×1024 JPG, nothing else.",
+
+  // ■ 1  Style block
+  `Apply EXACTLY this visual language: ${styleBlock}.`,
+  "Keep outlines ~6 px.",                                // consistency anchor
+
+
+  // ■ 2  Reference-photo fidelity
+  "Copy every face, pose, and object layout from the reference photo.",
+  "Do NOT crop or reposition main subjects.",
+
+  // ■ 3  Embedded text cloud
+  "Add a single SOFT-EDGED cloud (white, 70 % opacity).",
+  "Let the model decide the cloud's shape and position,",
+  "but it MUST NOT cover faces or important scene elements.",
+  `Inside that cloud, print this sentence **exactly once**, clear and readable:\n“${pageText?.trim() ?? ""}”`,
+  "Use exactly font Comic Neue Bold, navy colour (#1A2A6B), size ≈80 pt",
+
+  // ■ 4  Negative constraints
+  "No other text, watermarks, or duplicate words.",
+  "Do not invent new characters or props.",
+
+  // ■ 5  Finish
+  "Return only the image."
     ];
   }
 
