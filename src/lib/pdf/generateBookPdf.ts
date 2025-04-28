@@ -51,12 +51,6 @@ function generatePageHtml(page: Page, bookTitle: string): string {
       ${page.generatedImageUrl 
         ? `<img src="${page.generatedImageUrl}" alt="Page ${page.pageNumber} Illustration" style="${imageStyle}" />` 
         : '<div style="display:flex; align-items:center; justify-content:center; height:100%;">Image not generated</div>'}
-      {/* Text rendering removed - assuming text is embedded in generatedImageUrl */}
-      {/* 
-        ${page.text 
-          ? `<div class="page-text" style="${textStyle}">${page.text}</div>` 
-          : ''}
-      */}
     </div>
   `;
 }
