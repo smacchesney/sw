@@ -23,6 +23,10 @@ COPY . .
 # This uses tsconfig.worker.json and outputs to dist-worker/
 RUN npm run build:worker
 
+# Copy the workers' specific package.json to ensure CommonJS module type at runtime
+RUN mkdir -p dist-worker/src/queues/workers \
+    && cp src/queues/workers/package.json dist-worker/src/queues/workers/package.json
+
 # ---- run ----
 # Start from a clean Node.js Alpine image
 FROM node:20-alpine
