@@ -21,7 +21,8 @@ COPY . .
 
 # 3. Compile ONLY the worker TypeScript code
 # This uses tsconfig.worker.json and outputs to dist-worker/
-RUN npm run build:worker
+RUN npm run build:worker \
+    && npx tsc-alias -p tsconfig.worker.json
 
 # Add CommonJS manifest at the *root* of the compiled worker tree
 RUN cp src/queues/workers/package.json dist-worker/package.json
